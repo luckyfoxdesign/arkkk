@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  # svelte
+  sc_svelteapp:
+    image: node:19-alpine3.16
+    container_name: ct_svelteapp
+    # build:
+    #  context: ./app/
+    #  dockerfile: Dockerfile.dev
+    restart: always
+    ports: 
+      - 3000:3000
+    working_dir: /app
+    volumes:
+      - ./app/:/app
+    command: sh -c "npm install && npm run dev"
+    networks:
+      - internal
+  #mongo api
+  sc_nodemongoapi:
+    image: node:19-alpine3.16
+    container_name: ct_nodemongoapi
+    working_dir: /nodemongoapp
+    restart: always
+    ports:
+      - 3001:3001
+    expose: 
+      - 3001 
+    volumes:
+      - ./mongo:/nodemongoapp
+    command: sh -c "npm install && npm run start"
+    networks:
+     - internal
+  # nginx
+  sc_nginx:
+    image: nginx:latest
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      #- ./app/public:/usr/share/nginx/html
+    depends_on:
+      - sc_svelteapp
+  # go back
+  sc_goapp:
+   container_name: ct_goapp
+   build:
+    context: ./back/
+    dockerfile: Dockerfile.dev
+   restart: always
+   volumes:
+     - ./back/app:/usr/src/app
+   ports:
+     - 3002:8080
+   networks:
+     - internal
+  #mongodb
+  sc_mongodb:
+   image: mongo:6.0.6-jammy
+   container_name: ct_mongodb
+   restart: always
+   ports:
+     - 27017:27017
+   environment:
+     MONGO_INITDB_ROOT_USERNAME: root
+     MONGO_INITDB_ROOT_PASSWORD: root
+
+networks:
+  internal: 
+    driver: bridge
