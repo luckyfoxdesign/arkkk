@@ -1,2 +1,6 @@
 .DS_store
 node_modules/
+.svelte-kit
+package-lock.json
+.env
+dist

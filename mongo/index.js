@@ -5,6 +5,7 @@ const app = express()
 
 // Define a route
 app.get('/', async (req, res) => {
+  console.log("sc_nodemongoapi get request")
     res.sendStatus(200)
 })
 
