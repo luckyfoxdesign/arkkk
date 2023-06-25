@@ -8,8 +8,8 @@ services:
      context: ./app
      dockerfile: Dockerfile.dev
     restart: always
-    ports: 
-      - 3000:3000
+#    ports: 
+#      - 3000:3000
     expose:
       - 3000
     volumes:
@@ -21,7 +21,7 @@ services:
   sc_nodemongoapi:
     container_name: ct_nodemongoapi
     build:
-     context: ./app
+     context: ./mongo
      dockerfile: Dockerfile.dev
     restart: always
     ports:
@@ -57,8 +57,8 @@ services:
      - ./back/app:/app
    expose:
      - 8080
-   ports:
-     - 3002:8080
+#   ports:
+#     - 3002:8080
    networks:
      - internal
 
@@ -67,8 +67,8 @@ services:
    image: mongo:4.0.28-xenial
    container_name: sc_mongodb
    restart: always
-   ports:
-     - 27017:27017
+#   ports:
+#     - 27017:27017
    expose:
      - 27017
    environment:
