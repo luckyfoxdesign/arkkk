@@ -1,3 +1,1 @@
-FROM nginx:latest
-
-COPY ./nginx/nginx.conf /etc/nginx/conf.d/default.conf
+FROM nginx:stable-alpine3.17-slim

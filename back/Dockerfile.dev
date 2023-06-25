@@ -1,11 +1,25 @@
-FROM golang:1.20
+FROM golang:1.20-alpine3.18
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-COPY ./app/go.mod ./
-COPY ./app/go.sum ./
+COPY ./app .
+
 RUN go mod download && go mod verify
 
-CMD ["go", "run", "./..."]
+#RUN go get -u github.com/cosmtrek/air
+
+#RUN apk add curl
+
+# binary will be $(go env GOPATH)/bin/air
+#RUN curl -sSfL https://raw.githubusercontent.com/cosmtrek/air/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+
+# or install it into ./bin/
+#RUN curl -sSfL https://raw.githubusercontent.com/cosmtrek/air/master/install.sh | sh -s
+
+RUN go install github.com/cosmtrek/air@latest
+
+CMD air -v && air -c air.toml && air init 
+
+#CMD air server --port 8080
 
 EXPOSE 8080
