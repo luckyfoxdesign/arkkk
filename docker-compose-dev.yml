@@ -24,8 +24,8 @@ services:
      context: ./mongo
      dockerfile: Dockerfile.dev
     restart: always
-    ports:
-      - 3001:3001
+#    ports:
+#      - 3001:3001
     expose: 
       - 3001 
     volumes:

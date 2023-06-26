@@ -50,8 +50,8 @@ services:
    image: mongo:4.0.28-xenial
    container_name: sc_mongodb
    restart: always
-   ports:
-     - 27017:27017
+#   ports:
+#     - 27017:27017
    expose:
      - 27017
    environment:
