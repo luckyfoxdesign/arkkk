@@ -6,8 +6,7 @@ build_args = ["-tags", "development"]
 
 [build]
   binary = "./main"
-  exclude_dir = ["assets", "tmp"]
-  exclude_file = ["main.go"]
+  watch = true
 
 [log]
   error_log = "logs/error.log"

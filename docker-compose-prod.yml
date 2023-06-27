@@ -8,14 +8,27 @@ services:
      context: ./app
      dockerfile: Dockerfile.prod
     restart: always
-    ports: 
-      - 80:80
+#    ports: 
+#      - 3000:3000
     expose:
       - 3000
     volumes:
       - ./app/nginx_prod.conf:/etc/nginx/nginx.conf
     networks:
       - internal
+
+  # nginx
+  sc_nginx:
+    image: nginx:stable-alpine3.17-slim
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - sc_svelteapp
+    restart: always
+    networks:
+     - internal
 
   #mongo api
   sc_nodemongoapi:
