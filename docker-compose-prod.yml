@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  # svelte
+  sc_svelteapp:
+    container_name: ct_svelteapp
+    build:
+     context: ./app
+     dockerfile: Dockerfile.prod
+    restart: always
+#    ports: 
+#      - 3000:3000
+    expose:
+      - 3000
+    volumes:
+      - ./app/nginx_prod.conf:/etc/nginx/nginx.conf
+    networks:
+      - internal
+
+  # nginx
+  sc_nginx:
+    image: nginx:stable-alpine3.17-slim
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - sc_svelteapp
+    restart: always
+    networks:
+     - internal
+
+  #mongo api
+  sc_nodemongoapi:
+    container_name: ct_nodemongoapi
+    build:
+     context: ./mongo
+     dockerfile: Dockerfile.prod
+    restart: always
+#    ports:
+#      - 3001:3001
+    expose: 
+      - 3001 
+    networks:
+     - internal
+
+  # go back
+  sc_goapp:
+   container_name: ct_goapp
+   build:
+    context: ./back
+    dockerfile: Dockerfile.prod
+   restart: always
+   expose:
+     - 8080
+#   ports:
+#     - 3002:8080
+   networks:
+     - internal
+
+  #mongodb
+  sc_mongodb:
+   image: mongo:4.0.28-xenial
+   container_name: sc_mongodb
+   restart: always
+#   ports:
+#     - 27017:27017
+   expose:
+     - 27017
+   environment:
+     MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+   env_file: .env
+   volumes:
+     - ./mongodata:/data/db
+   networks:
+    - internal
+
+
+networks:
+  internal: 
+    driver: bridge
