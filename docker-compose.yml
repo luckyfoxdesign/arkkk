@@ -18,17 +18,34 @@ services:
       - internal
 
   # nginx
-  sc_nginx:
+  nginx:
     image: nginx:stable-alpine3.17-slim
     ports:
       - 80:80
+      - 443:443
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./CERTBOT/certbot/conf:/etc/letsencrypt
+      - ./CERTBOT/certbot/www:/var/www/certbot
     depends_on:
       - sc_svelteapp
     restart: always
     networks:
      - internal
+    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
+
+  certbot:
+    container_name: certbot
+    image: certbot/certbot
+    networks:
+        internal:
+          aliases:
+            - "certbot"
+    restart: unless-stopped
+    entrypoint:  "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    volumes:
+      - ./CERTBOT/certbot/conf:/etc/letsencrypt
+      - ./CERTBOT/certbot/www:/var/www/certbot
 
   #mongo api
   sc_nodemongoapi:
@@ -39,8 +56,8 @@ services:
     restart: always
 #    ports:
 #      - 3001:3001
-    expose: 
-      - 3001 
+    expose:
+      - 3001
     networks:
      - internal
 
