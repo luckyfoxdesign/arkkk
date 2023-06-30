@@ -7,3 +7,5 @@ dist
 mongodata/
 build/
 CERTBOT/
+back/app/nuts/
+back/app/tmp

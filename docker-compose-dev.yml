@@ -8,8 +8,6 @@ services:
      context: ./app
      dockerfile: Dockerfile.dev
     restart: always
-#    ports: 
-#      - 3000:3000
     expose:
       - 3000
     volumes:
@@ -24,8 +22,6 @@ services:
      context: ./mongo
      dockerfile: Dockerfile.dev
     restart: always
-#    ports:
-#      - 3001:3001
     expose: 
       - 3001 
     volumes:
@@ -36,10 +32,11 @@ services:
   # nginx
   sc_nginx:
     image: nginx:stable-alpine3.17-slim
+    container_name: ct_nginx
     ports:
       - 80:80
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/dev/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - sc_svelteapp
     restart: always
@@ -67,8 +64,6 @@ services:
    image: mongo:4.0.28-xenial
    container_name: sc_mongodb
    restart: always
-#   ports:
-#     - 27017:27017
    expose:
      - 27017
    environment:
