@@ -1,0 +1,15 @@
+.DS_store
+node_modules/
+.svelte-kit/
+svelteapp/.svelte-kit/
+package-lock.json
+*.env
+dist
+mongodb/
+mariadb/
+nodemongo/
+build/
+CERTBOT/
+goapp/app/nuts/
+goapp/app/tmp/
+help/

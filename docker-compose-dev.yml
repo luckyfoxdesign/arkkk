@@ -1,0 +1,96 @@
+version: "3.8"
+
+services:
+  # svelte
+  sc_svelteapp:
+    container_name: ct_svelteapp
+    build:
+     context: ./svelteapp
+     dockerfile: Dockerfile.dev
+    restart: always
+    expose:
+      - 3000
+    volumes:
+      - ./svelteapp:/app
+    networks:
+      - internal
+
+  # nginx
+  sc_nginx:
+    image: nginx:stable-alpine3.17-slim
+    container_name: ct_nginx
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/dev/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - sc_svelteapp
+    restart: always
+    networks:
+     - internal
+
+  # go back
+  sc_goapp:
+   container_name: ct_goapp
+   build:
+    context: ./goapp/
+    dockerfile: Dockerfile.dev
+   restart: always
+   env_file: 
+     - ./common.env
+     - ./goapp/goapp.env
+   volumes:
+     - ./goapp/app:/app
+   expose:
+     - 8080
+   ports:
+     - 3002:8080
+   networks:
+     - internal
+
+  #mongodb
+  # sc_mongodb:
+  #  image: mongo:6.0.6-jammy
+  #  container_name: ct_mongodb
+  #  restart: always
+  #  expose:
+  #    - 27017
+  #  env_file: 
+  #    - ./mongodb/mongodb.env
+  #    - ./common.env
+  #  volumes:
+  #    - ./mongodb/init/:/docker-entrypoint-initdb.d/
+  #    - ./mongodb/data:/data/db
+  #  networks:
+  #   - internal
+
+  #mariadb
+  sc_mariadb:
+   image: mariadb:11.0.2-jammy
+   container_name: ct_mariab
+   restart: always
+   expose:
+     - 3306
+   env_file: 
+     - ./common.env
+     - ./mariadb/mariadb.env
+   volumes:
+     - ./mariadb/init/:/docker-entrypoint-initdb.d/
+     - ./mariadb/data:/var/lib/mysql
+   networks:
+    - internal
+
+  sc_adminer:
+   image: adminer
+   container_name: ct_adminer
+   restart: always
+   depends_on: 
+      - sc_mariadb
+   ports:
+      - 8080:8080
+   networks:
+    - internal
+
+networks:
+  internal: 
+    driver: bridge
