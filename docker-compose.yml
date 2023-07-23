@@ -5,7 +5,7 @@ services:
   sc_svelteapp:
     container_name: ct_svelteapp
     build:
-     context: ./app
+     context: ./svelteapp
      dockerfile: Dockerfile.prod
     restart: always
     expose:
