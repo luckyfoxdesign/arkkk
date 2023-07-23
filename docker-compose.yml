@@ -54,23 +54,26 @@ services:
     dockerfile: Dockerfile.prod
    restart: always
    env_file: 
+     - ./common.env
      - ./goapp/goapp.env
    expose:
      - 8080
    networks:
      - internal
 
-  #mongodb
-  sc_mongodb:
-   image: mongo:4.0.28-xenial
-   container_name: ct_mongodb
+  #mariadb
+  sc_mariadb:
+   image: mariadb:11.0.2-jammy
+   container_name: ct_mariab
    restart: always
    expose:
-     - 27017
+     - 3306
    env_file: 
-     - ./mongodb/mongodb.env
+     - ./common.env
+     - ./mariadb/mariadb.env
    volumes:
-     - ./mongodb/data:/data/db
+     - ./mariadb/init/:/docker-entrypoint-initdb.d/
+     - ./mariadb/data:/var/lib/mysql
    networks:
     - internal
 
