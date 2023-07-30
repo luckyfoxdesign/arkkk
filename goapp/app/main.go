@@ -39,6 +39,11 @@ type UnitStruct struct {
 	FormulaID int32
 }
 
+type KeyValuePair struct {
+	Key string
+	Val string
+}
+
 func main() {
 	bucketName := os.Getenv("BUCKET_NAME")
 	mariadburi := os.Getenv("MARDB_URI")
@@ -67,13 +72,13 @@ func main() {
 	app.Put("/insertkv", func(ctx iris.Context) {
 		body, err := ctx.GetBody()
 		if err != nil {
-			log.Default().Println("body read \n", err)
+			log.Default().Println("-> app.Put(/insertkv) -> body read \n", err)
 			ctx.StatusCode(iris.StatusInternalServerError)
 			return
 		}
 
 		if len(body) == 0 {
-			log.Default().Println("body empty\n", err)
+			log.Default().Println("-> app.Put(/insertkv) -> body empty\n", err)
 			ctx.StatusCode(iris.StatusNoContent)
 			return
 		} else {
@@ -87,12 +92,19 @@ func main() {
 				// add not inserted results to the response
 				// not only status
 				ctx.StatusCode(iris.StatusPartialContent)
-				log.Default().Println("not inserted keys:", notInsertedKeys)
+				log.Default().Println("-> app.Put(/insertkv) -> not inserted keys:", notInsertedKeys)
 				return
 			}
-			log.Default().Println("all received keys were inserted")
+			log.Default().Println("-> app.Put(/insertkv) -> all received keys were inserted")
 			ctx.StatusCode(iris.StatusOK)
 		}
+	})
+
+	app.Get("/keys/list", func(ctx iris.Context) {
+		bucketKeyValuesList := getAllBucketKeyPairs(bucketName, db)
+		response := iris.Map{"list": bucketKeyValuesList}
+		options := iris.JSON{Indent: "", Secure: true}
+        ctx.JSON(response, options)
 	})
 
 	app.Get("/calc", func(ctx iris.Context) {
@@ -108,14 +120,17 @@ func main() {
 		convertedValues, err := convertUnitsStringIdsToInt(parsedValues)
 		if err != nil {
 			getStatus = 0
-			log.Default().Println("-> convertUnitsStringIdsToInt()\n", err)
+			log.Default().Println("-> app.Get(/calc) -> convertUnitsStringIdsToInt()\n", err)
 		} else {
 			unitsRatios, err = returnUnitsRatiosFromDB(mardb, convertedValues.FromUnitId, convertedValues.ToUnitId)
 			if err != nil {
 				getStatus = 0
-				log.Default().Println("-> returnUnitsRatiosFromDB()\n", err)
+				log.Default().Println("-> app.Get(/calc) -> returnUnitsRatiosFromDB()\n", err)
 			}
 		}
+
+		// TODO
+		// cтоит проверять слайс на пустые значения т.к это возможна самая частая ощибка
 
 		ctx.JSON(iris.Map{
 			"val":    parsedValues.Value,
@@ -167,7 +182,7 @@ func parseStringValuesToMap(stringToParse []string) map[string]string {
 	return keyValues
 }
 
-func parseInputString(row, BUCKET_NAME string, db *nutsdb.DB) ValuesData {
+func parseInputString(row, bucketName string, db *nutsdb.DB) ValuesData {
 	// TODO
 	// TOOOO deep nesting for child functions
 	var (
@@ -180,11 +195,11 @@ func parseInputString(row, BUCKET_NAME string, db *nutsdb.DB) ValuesData {
 	if delimeterIndex != -1 {
 		partBeforeDelimeter := row[:delimeterIndex]
 
-		fromValue, fromUnitId = parseFromValueAndUnitName(partBeforeDelimeter, BUCKET_NAME, db)
+		fromValue, fromUnitId = parseFromValueAndUnitName(partBeforeDelimeter, bucketName, db)
 
 		partAfterDelimeterSlice := strings.Fields(row[delimeterIndex+4:])
 
-		toUnitId = parseToUnitId(partAfterDelimeterSlice, BUCKET_NAME, db)
+		toUnitId = parseToUnitId(partAfterDelimeterSlice, bucketName, db)
 
 		valuesData.FromUnitId = fromUnitId
 		valuesData.ToUnitId = toUnitId
@@ -229,7 +244,7 @@ func returnUnitsRatiosFromDB(db *sql.DB, fromUnitId, toUnitId int) ([]UnitStruct
 
 	res, err := db.Query("SELECT ratio, formula_id FROM list WHERE unit_id=? || unit_id=?", fromUnitId, toUnitId)
 	if err != nil {
-		log.Default().Println("-> db.Query()")
+		log.Default().Println("-> returnUnitsRatiosFromDB() -> db.Query()")
 		return result, err
 	}
 
@@ -239,7 +254,7 @@ func returnUnitsRatiosFromDB(db *sql.DB, fromUnitId, toUnitId int) ([]UnitStruct
 		err := res.Scan(&unit.Ratio, &unit.FormulaID)
 
 		if err != nil {
-			log.Default().Println("-> res.Scan()")
+			log.Default().Println("-> returnUnitsRatiosFromDB() -> res.Scan()")
 			return result, err
 		}
 
@@ -249,11 +264,11 @@ func returnUnitsRatiosFromDB(db *sql.DB, fromUnitId, toUnitId int) ([]UnitStruct
 	return result, err
 }
 
-func parseToUnitId(partAfterDelimeterSlice []string, BUCKET_NAME string, db *nutsdb.DB) string {
+func parseToUnitId(partAfterDelimeterSlice []string, bucketName string, db *nutsdb.DB) string {
 	var toUnitId string
 	if len(partAfterDelimeterSlice) > 0 {
 		for _, v := range partAfterDelimeterSlice {
-			keyValue, err := getUnitIndexFromDB(v, BUCKET_NAME, db)
+			keyValue, err := getUnitIndexFromDB(v, bucketName, db)
 			if err != nil {
 				continue
 			}
@@ -266,15 +281,15 @@ func parseToUnitId(partAfterDelimeterSlice []string, BUCKET_NAME string, db *nut
 	return toUnitId
 }
 
-func getUnitIndexFromDB(unitName, BUCKET_NAME string, db *nutsdb.DB) (string, error) {
+func getUnitIndexFromDB(unitName, bucketName string, db *nutsdb.DB) (string, error) {
 	byteName := []byte(unitName)
 	var unitIndex string
 
 	err := db.View(
 		func(tx *nutsdb.Tx) error {
-			e, err := tx.Get(BUCKET_NAME, byteName)
+			e, err := tx.Get(bucketName, byteName)
 			if err != nil {
-				log.Default().Println("tx.Get error:", err)
+				log.Default().Println("-> getUnitIndexFromDB() -> tx.Get error:", err)
 				return err
 			}
 			unitIndex = string(e.Value)
@@ -282,12 +297,12 @@ func getUnitIndexFromDB(unitName, BUCKET_NAME string, db *nutsdb.DB) (string, er
 		})
 
 	if err != nil {
-		log.Default().Println("db.View error:", err)
+		log.Default().Println("-> getUnitIndexFromDB() -> db.View error:", err)
 	}
 	return unitIndex, err
 }
 
-func parseFromValueAndUnitName(fromDataStr, BUCKET_NAME string, db *nutsdb.DB) (int, string) {
+func parseFromValueAndUnitName(fromDataStr, bucketName string, db *nutsdb.DB) (int, string) {
 	var fromValue, fromValueStartIndex, fromValueEndIndex int = 0, -1, 0
 	var fromUnitId string
 
@@ -308,7 +323,7 @@ func parseFromValueAndUnitName(fromDataStr, BUCKET_NAME string, db *nutsdb.DB) (
 
 	valuesArray := strings.Fields(fromDataStr[fromValueEndIndex:])
 	fromUnitName := strings.ToLower(valuesArray[0])
-	fromUnitId, _ = getUnitIndexFromDB(fromUnitName, BUCKET_NAME, db)
+	fromUnitId, _ = getUnitIndexFromDB(fromUnitName, bucketName, db)
 
 	return fromValue, fromUnitId
 }
@@ -325,4 +340,32 @@ func getDelimeter(str string) int {
 		}
 	}
 	return -1
+}
+
+func getAllBucketKeyPairs(bucketName string, db *nutsdb.DB) []KeyValuePair {
+	var bucketKeyValuesList []KeyValuePair
+
+	err := db.View(
+		func(tx *nutsdb.Tx) error {
+			entries, err := tx.GetAll(bucketName)
+			if err != nil {
+				log.Default().Println("-> getAllBucketKeyPairs() -> tx.GetAll error:", err)
+				return err
+			}
+			
+			for _, entry := range entries {
+				pair := KeyValuePair{}
+				pair.Key = string(entry.Key)
+				pair.Val = string(entry.Value)
+				bucketKeyValuesList = append(bucketKeyValuesList, pair)
+			}
+			
+			return nil
+		})
+
+	if err != nil {
+		log.Default().Println("-> getAllBucketKeyPairs() -> db.View error:", err)
+	}
+
+	return bucketKeyValuesList
 }

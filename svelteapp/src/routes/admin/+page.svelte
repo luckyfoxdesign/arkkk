@@ -26,6 +26,8 @@
   // update key
   // remove key
   // get keys by id
+
+  export let data;
 </script>
 
 <svelte:head>
@@ -35,3 +37,12 @@
 <textarea name="" id="" cols="30" rows="10" bind:value={textarea} />
 <p>Status: {status}</p>
 <button type="submit" on:click={sendData}>Add to DB</button>
+
+<div class="list">
+  {#each data.list as pair}
+    <div class="list-pair">
+      <label>{pair.Val}<input type="text" value="{pair.Key}"></label>
+      <button type="submit">Save</button>
+    </div>
+  {/each}
+</div>

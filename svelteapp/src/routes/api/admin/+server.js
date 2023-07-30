@@ -19,7 +19,5 @@ async function getResult(text) {
     headers: { "Content-Type": "text/plain" },
     body: text,
   })
-  console.log(resp.status);
-  console.log(resp.statusText);
-  return 200;
+  return resp.status;
 }

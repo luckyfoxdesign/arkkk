@@ -14,6 +14,19 @@ services:
       - ./svelteapp:/app
     networks:
       - internal
+  
+  sc_adminapp:
+    container_name: ct_adminapp
+    build:
+     context: ./adminapp
+     dockerfile: Dockerfile.dev
+    restart: always
+    ports:
+      - 3000:3000
+    volumes:
+      - ./adminapp:/app
+    networks:
+      - internal
 
   # nginx
   sc_nginx:
