@@ -1,7 +1,7 @@
 <script>
 	let result = ""
 	async function sendRequestToCalculate(row) {
-		const response = await fetch(`api/user/?r=${row}`);
+		const response = await fetch(`api/?r=${row}`);
 		console.log(response.status)
 		const responseJSON = await response.json()
 		result = responseJSON.result
