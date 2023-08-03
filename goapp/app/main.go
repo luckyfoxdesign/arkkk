@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
+	//"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -258,7 +258,7 @@ func returnUnitsRatiosFromDB(db *sql.DB, fromUnitId, toUnitId int) ([]UnitStruct
 			return result, err
 		}
 
-		fmt.Println("UNIT\n", unit)
+		//fmt.Println("UNIT\n", unit)
 		result = append(result, unit)
 	}
 	return result, err

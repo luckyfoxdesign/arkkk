@@ -8,7 +8,7 @@
   let sortByIdInput = "";
   async function sendData() {
     const text = textarea.replaceAll("\n", " ");
-    const response = await fetch(`/api/?t=${encodeURIComponent("w")}`, {
+    const response = await fetch(`/api/insert/?t=${encodeURIComponent("w")}`, {
       method: "PUT",
       headers: { "Content-Type": "text/plain" },
       body: text,

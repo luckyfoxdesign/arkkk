@@ -6,7 +6,11 @@ export async function load({ params }) {
 }
 
 async function getAllKeyValuePairs() {
+  let responseJSON = []
   const requestResponse = await fetch(`http://sc_goapp:8080/keys/list`);
-  const responseJSON = await requestResponse.json();
+
+  if (requestResponse.status == 200) {
+    responseJSON = await requestResponse.json();
+  }
   return responseJSON;
 }
