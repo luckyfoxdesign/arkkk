@@ -17,11 +17,19 @@
 		<input class="input-line" placeholder="Ex: 1kg to gr" type="text" on:input={async (e) => await sendRequestToCalculate(e.target.value)}>
 		<div class="input-result">= {result}</div>
 	</div>
+	<div class="examples">
+		<p>Examples</p>
+		<p>1kg to gr</p>
+		<p>12t in mcg</p>
+	</div>
+	<div class="links">
+		<a href="/units">Supported units</a>
+	</div>
 </div>
 
 <style>
 	.wrapper {
-		display: flex;
+		display: grid;
 		justify-content: center;
 	}
 	.editor-input {
