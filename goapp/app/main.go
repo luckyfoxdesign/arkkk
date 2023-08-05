@@ -45,8 +45,27 @@ type KeyValuePair struct {
 }
 
 func main() {
+	var nutsDbPath string = "./nuts"
+
 	bucketName := os.Getenv("BUCKET_NAME")
 	mariadburi := os.Getenv("MARDB_URI")
+
+	files, err := os.ReadDir("./nuts_tmp")
+	if err != nil {
+		log.Default().Println("-> main() -> os.ReadDir()", err)
+	}
+
+	if len(files) > 0 {
+		nutsDbPath = "./nuts_tmp"
+	}
+
+	db, err := nutsdb.Open(
+		nutsdb.DefaultOptions,
+		nutsdb.WithDir(nutsDbPath),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	mardb, err := sql.Open("mysql", mariadburi)
 	if err != nil {
@@ -58,14 +77,6 @@ func main() {
 	mardb.SetMaxIdleConns(10)
 
 	defer mardb.Close()
-
-	db, err := nutsdb.Open(
-		nutsdb.DefaultOptions,
-		nutsdb.WithDir("./nuts"),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	app := iris.Default()
 

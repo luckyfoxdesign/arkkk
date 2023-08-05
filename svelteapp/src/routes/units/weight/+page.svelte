@@ -17,7 +17,6 @@
         "centner",
         "centigram",
         "milligram",
-        "milligram",
         "microgram",
         "megaton",
         "gigatonne",

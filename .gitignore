@@ -13,4 +13,5 @@ build/
 CERTBOT/
 goapp/app/nuts/
 goapp/app/tmp/
+goapp/app/nuts_tmp/
 wiki/
