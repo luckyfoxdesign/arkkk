@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+
 	//"fmt"
 	"log"
 	"os"
@@ -52,7 +53,7 @@ func main() {
 
 	files, err := os.ReadDir("./nuts_tmp")
 	if err != nil {
-		log.Default().Println("-> main() -> os.ReadDir()", err)
+		log.Default().Println("-> os.ReadDir()", err)
 	}
 
 	if len(files) > 0 {
@@ -113,9 +114,9 @@ func main() {
 
 	app.Get("/keys/list", func(ctx iris.Context) {
 		bucketKeyValuesList := getAllBucketKeyPairs(bucketName, db)
-		response := iris.Map{"list": bucketKeyValuesList}
-		options := iris.JSON{Indent: "", Secure: true}
-        ctx.JSON(response, options)
+		responseJSON := iris.Map{"list": bucketKeyValuesList}
+		responseOptions := iris.JSON{Indent: "", Secure: true}
+		ctx.JSON(responseJSON, responseOptions)
 	})
 
 	app.Get("/calc", func(ctx iris.Context) {
@@ -132,7 +133,9 @@ func main() {
 		if err != nil {
 			getStatus = 0
 			log.Default().Println("-> app.Get(/calc) -> convertUnitsStringIdsToInt()\n", err)
-		} else {
+		}
+
+		if convertedValues.Status != 0 {
 			unitsRatios, err = returnUnitsRatiosFromDB(mardb, convertedValues.FromUnitId, convertedValues.ToUnitId)
 			if err != nil {
 				getStatus = 0
@@ -140,18 +143,46 @@ func main() {
 			}
 		}
 
-		// TODO
-		// cтоит проверять слайс на пустые значения т.к это возможна самая частая ощибка
+		responseJSON := returnResponseIrisMap(unitsRatios)
+		responseJSON["status"] = getStatus
+		responseJSON["val"] = parsedValues.Value
 
-		ctx.JSON(iris.Map{
-			"val":    parsedValues.Value,
-			"fur":    unitsRatios[0].Ratio, // from
-			"tur":    unitsRatios[1].Ratio, // to
-			"fid":    unitsRatios[0].FormulaID,
-			"status": getStatus,
-		})
+		responseOptions := iris.JSON{Indent: "", Secure: true}
+
+		ctx.JSON(responseJSON, responseOptions)
 	})
 	app.Listen(":8080")
+}
+
+func returnResponseIrisMap(unitsRatios []UnitStruct) iris.Map {
+	var responseJSON iris.Map = iris.Map{
+		"val":    0,
+		"fur":    0,
+		"tur":    0,
+		"fid":    0,
+		"status": 0,
+	}
+
+	checkStatus := checkParsedUnitsRatiosAndFormulaExists(unitsRatios)
+
+	if checkStatus {
+		responseJSON["fur"] = unitsRatios[0].Ratio
+		responseJSON["tur"] = unitsRatios[1].Ratio
+		responseJSON["fid"] = unitsRatios[1].FormulaID
+		responseJSON["status"] = 1
+	}
+
+	return responseJSON
+}
+
+func checkParsedUnitsRatiosAndFormulaExists(units []UnitStruct) bool {
+	var flag bool
+
+	if len(units) == 2 {
+		flag = true
+	}
+
+	return flag
 }
 
 func insertKeysAndValuesToDB(dataToInsert map[string]string, db *nutsdb.DB, bucketName string) map[string]string {
@@ -206,12 +237,14 @@ func parseInputString(row, bucketName string, db *nutsdb.DB) ValuesData {
 	if delimeterIndex != -1 {
 		partBeforeDelimeter := row[:delimeterIndex]
 
+		// для from unit всегда будет значение т.к мы берем все что левее разделителя
 		fromValue, fromUnitId = parseFromValueAndUnitName(partBeforeDelimeter, bucketName, db)
-
 		partAfterDelimeterSlice := strings.Fields(row[delimeterIndex+4:])
-
 		toUnitId = parseToUnitId(partAfterDelimeterSlice, bucketName, db)
 
+		// добавить функцию отправки в базу того что в итоге вышло для конвертации
+
+		// значения id могут быть пустыми если они не были найдены в базе
 		valuesData.FromUnitId = fromUnitId
 		valuesData.ToUnitId = toUnitId
 		valuesData.Value = fromValue
@@ -234,6 +267,10 @@ func parseInputString(row, bucketName string, db *nutsdb.DB) ValuesData {
 func convertUnitsStringIdsToInt(values ValuesData) (UnitsIds, error) {
 	var fuid, tuid int
 	convertedValues := UnitsIds{}
+
+	if values.FromUnitId == "" || values.ToUnitId == "" {
+		return convertedValues, nil
+	}
 
 	fuid, err := strconv.Atoi(values.FromUnitId)
 	if err != nil {
@@ -269,7 +306,6 @@ func returnUnitsRatiosFromDB(db *sql.DB, fromUnitId, toUnitId int) ([]UnitStruct
 			return result, err
 		}
 
-		//fmt.Println("UNIT\n", unit)
 		result = append(result, unit)
 	}
 	return result, err
@@ -363,14 +399,14 @@ func getAllBucketKeyPairs(bucketName string, db *nutsdb.DB) []KeyValuePair {
 				log.Default().Println("-> getAllBucketKeyPairs() -> tx.GetAll error:", err)
 				return err
 			}
-			
+
 			for _, entry := range entries {
 				pair := KeyValuePair{}
 				pair.Key = string(entry.Key)
 				pair.Val = string(entry.Value)
 				bucketKeyValuesList = append(bucketKeyValuesList, pair)
 			}
-			
+
 			return nil
 		})
 

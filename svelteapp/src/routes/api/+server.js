@@ -9,16 +9,13 @@ export async function GET({ event, url, params }) {
     
     const rowToParse = url.searchParams.get("r");
 
-    if (rowToParse.length == 0) {
+    if (rowToParse.length <= 6) {
         return json(emptyResultObject)
     }
 
-    if (rowToParse.length > 70) {
-        rowToParse = rowToParse.substring(0, 70)
-    }
+    rowToParse = rowToParse.substring(0, 70)
 
     const rowParsingResponse = await getResult(rowToParse);
-    console.log(rowParsingResponse)
 
     if (rowParsingResponse.status === 0) {
         return json(emptyResultObject)
@@ -29,7 +26,6 @@ export async function GET({ event, url, params }) {
         return json(resultObject)
     }
 
-    console.log(rowParsingResponse)
     const formula = formulasList[rowParsingResponse.fid-1]
     const result = formula.calculate(rowParsingResponse.fur, rowParsingResponse.tur, rowParsingResponse.val)
     const resultObject = returnClonedObject(emptyResultObject)
