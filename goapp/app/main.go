@@ -48,8 +48,9 @@ type KeyValuePair struct {
 func main() {
 	var nutsDbPath string = "./nuts"
 
-	bucketName := os.Getenv("BUCKET_NAME")
+	unitsBucketName := os.Getenv("UNITS_BUCKET_NAME")
 	mariadburi := os.Getenv("MARDB_URI")
+	delimetersBucketName := os.Getenv("DELIMETERS_BUCKET_NAME")
 
 	files, err := os.ReadDir("./nuts_tmp")
 	if err != nil {
@@ -97,7 +98,7 @@ func main() {
 			keysWithSpaces := string(body)
 			keysSlice := strings.Fields(keysWithSpaces)
 			keysToInsert := parseStringValuesToMap(keysSlice)
-			notInsertedKeys := insertKeysAndValuesToDB(keysToInsert, db, bucketName)
+			notInsertedKeys := insertKeysAndValuesToDB(keysToInsert, db, unitsBucketName)
 
 			if len(notInsertedKeys) > 0 {
 				// TODO
@@ -113,7 +114,7 @@ func main() {
 	})
 
 	app.Get("/keys/list", func(ctx iris.Context) {
-		bucketKeyValuesList := getAllBucketKeyPairs(bucketName, db)
+		bucketKeyValuesList := getAllBucketKeyPairs(unitsBucketName, db)
 		responseJSON := iris.Map{"list": bucketKeyValuesList}
 		responseOptions := iris.JSON{Indent: "", Secure: true}
 		ctx.JSON(responseJSON, responseOptions)
@@ -128,7 +129,7 @@ func main() {
 		// TODO
 		// 1. write logs to db
 
-		parsedValues := parseInputString(row, bucketName, db)
+		parsedValues := parseInputString(row, unitsBucketName, delimetersBucketName, db)
 		convertedValues, err := convertUnitsStringIdsToInt(parsedValues)
 		if err != nil {
 			getStatus = 0
@@ -224,7 +225,7 @@ func parseStringValuesToMap(stringToParse []string) map[string]string {
 	return keyValues
 }
 
-func parseInputString(row, bucketName string, db *nutsdb.DB) ValuesData {
+func parseInputString(row, unitsBucketName, delimetersBucketName string, db *nutsdb.DB) ValuesData {
 	// TODO
 	// TOOOO deep nesting for child functions
 	var (
@@ -232,15 +233,17 @@ func parseInputString(row, bucketName string, db *nutsdb.DB) ValuesData {
 		fromUnitId, toUnitId string
 	)
 	valuesData := ValuesData{}
-	delimeterIndex := getDelimeter(row)
+	delimeterIndex := getDelimeter(row, delimetersBucketName, db)
 
 	if delimeterIndex != -1 {
 		partBeforeDelimeter := row[:delimeterIndex]
 
 		// для from unit всегда будет значение т.к мы берем все что левее разделителя
-		fromValue, fromUnitId = parseFromValueAndUnitName(partBeforeDelimeter, bucketName, db)
+		fromValue, fromValueEndIndex := parseFromValueAndUnitName(partBeforeDelimeter)
+		fromUnitId := parseFromUnitId(partBeforeDelimeter, unitsBucketName, fromValueEndIndex, db)
+
 		partAfterDelimeterSlice := strings.Fields(row[delimeterIndex+4:])
-		toUnitId = parseToUnitId(partAfterDelimeterSlice, bucketName, db)
+		toUnitId = parseToUnitId(partAfterDelimeterSlice, unitsBucketName, db)
 
 		// добавить функцию отправки в базу того что в итоге вышло для конвертации
 
@@ -349,11 +352,21 @@ func getUnitIndexFromDB(unitName, bucketName string, db *nutsdb.DB) (string, err
 	return unitIndex, err
 }
 
-func parseFromValueAndUnitName(fromDataStr, bucketName string, db *nutsdb.DB) (int, string) {
-	var fromValue, fromValueStartIndex, fromValueEndIndex int = 0, -1, 0
-	var fromUnitId string
+func parseFromUnitId(sliceBetweenValueAndDelimeter, bucketName string, fromValueEndIndex int, db *nutsdb.DB) string {
 
-	for i, v := range fromDataStr {
+	valuesArray := strings.Fields(sliceBetweenValueAndDelimeter[fromValueEndIndex:])
+	//TODO
+	// could we analize all values from slice to understand which value is correct??
+	fromUnitName := strings.ToLower(valuesArray[0])
+	fromUnitId, _ := getUnitIndexFromDB(fromUnitName, bucketName, db)
+
+	return fromUnitId
+}
+
+func parseFromValueAndUnitName(strPartBeforeDelimeter string) (int, int) {
+	var fromValue, fromValueStartIndex, fromValueEndIndex int = 0, -1, 0
+
+	for i, v := range strPartBeforeDelimeter {
 		if unicode.IsSpace(v) {
 			continue
 		}
@@ -362,31 +375,52 @@ func parseFromValueAndUnitName(fromDataStr, bucketName string, db *nutsdb.DB) (i
 		}
 		if !unicode.IsDigit(v) && fromValueStartIndex != -1 {
 			fromValueEndIndex = i
-			tmp := strings.ReplaceAll(fromDataStr[fromValueStartIndex:i], " ", "")
+			tmp := strings.ReplaceAll(strPartBeforeDelimeter[fromValueStartIndex:i], " ", "")
 			fromValue, _ = strconv.Atoi(tmp)
 			break
 		}
 	}
 
-	valuesArray := strings.Fields(fromDataStr[fromValueEndIndex:])
-	fromUnitName := strings.ToLower(valuesArray[0])
-	fromUnitId, _ = getUnitIndexFromDB(fromUnitName, bucketName, db)
-
-	return fromValue, fromUnitId
+	return fromValue, fromValueEndIndex
 }
 
-func getDelimeter(str string) int {
+func getDelimeter(str, bucketName string, db *nutsdb.DB) int {
 	// TODO
 	// store delimeters in different bucket
-	var delimetersList = [5]string{" to ", " in ", " в ", " ещ ", " шт "}
-	var delimeterIndex int
-	for _, v := range delimetersList {
-		delimeterIndex = strings.Index(str, v)
-		if delimeterIndex != -1 {
-			return delimeterIndex
-		}
+	// var delimetersList = [5]string{" to ", " in ", " в ", " ещ ", " шт "}
+	var delimeterIndex int = -1
+	// for _, v := range delimetersList {
+	// 	delimeterIndex = strings.Index(str, v)
+	// 	if delimeterIndex != -1 {
+	// 		return delimeterIndex
+	// 	}
+	// }
+
+	err := db.View(
+		func(tx *nutsdb.Tx) error {
+			entries, err := tx.GetAll(bucketName)
+			if err != nil {
+				log.Default().Println("-> getDelimeter() -> tx.GetAll error:", err)
+				return err
+			}
+
+			for _, entry := range entries {
+				key := string(entry.Key)
+				keyIndex := strings.Index(str, key)
+
+				if keyIndex != -1 {
+					delimeterIndex = keyIndex
+				}
+			}
+
+			return nil
+		})
+
+	if err != nil {
+		log.Default().Println("-> getDelimeter() -> db.View error:", err)
 	}
-	return -1
+
+	return delimeterIndex
 }
 
 func getAllBucketKeyPairs(bucketName string, db *nutsdb.DB) []KeyValuePair {
