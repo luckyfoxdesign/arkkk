@@ -50,7 +50,6 @@ func main() {
 
 	unitsBucketName := os.Getenv("UNITS_BUCKET_NAME")
 	mariadburi := os.Getenv("MARDB_URI")
-	delimetersBucketName := os.Getenv("DELIMETERS_BUCKET_NAME")
 
 	files, err := os.ReadDir("./nuts_tmp")
 	if err != nil {
@@ -129,7 +128,7 @@ func main() {
 		// TODO
 		// 1. write logs to db
 
-		parsedValues := parseInputString(row, unitsBucketName, delimetersBucketName, db)
+		parsedValues := parseInputString(row, unitsBucketName, db)
 		convertedValues, err := convertUnitsStringIdsToInt(parsedValues)
 		if err != nil {
 			getStatus = 0
@@ -155,6 +154,7 @@ func main() {
 	app.Listen(":8080")
 }
 
+// Заполняем карту данными для ответа клиенту из полученной структуры с данными из базы
 func returnResponseIrisMap(unitsRatios []UnitStruct) iris.Map {
 	var responseJSON iris.Map = iris.Map{
 		"val":    0,
@@ -176,6 +176,8 @@ func returnResponseIrisMap(unitsRatios []UnitStruct) iris.Map {
 	return responseJSON
 }
 
+// Проверка наличия в структуре обоих значение from/to
+// смысла отправлять частями кажется нет
 func checkParsedUnitsRatiosAndFormulaExists(units []UnitStruct) bool {
 	var flag bool
 
@@ -186,6 +188,9 @@ func checkParsedUnitsRatiosAndFormulaExists(units []UnitStruct) bool {
 	return flag
 }
 
+// Перебор входной карты и добавление в локальную базу пар ключ-значение
+// Можно использовать как для массового добавления, так и для одного
+// Используется для админки
 func insertKeysAndValuesToDB(dataToInsert map[string]string, db *nutsdb.DB, bucketName string) map[string]string {
 	notInsertedValues := map[string]string{}
 	for k, v := range dataToInsert {
@@ -209,6 +214,9 @@ func insertKeysAndValuesToDB(dataToInsert map[string]string, db *nutsdb.DB, buck
 	return notInsertedValues
 }
 
+// Перебор значений массива и добавление этих значений в карту
+// Формат даных: 102 one two three 104 five six seven ...
+// Используется для админки
 func parseStringValuesToMap(stringToParse []string) map[string]string {
 	keyValues := map[string]string{}
 	var id string
@@ -219,13 +227,13 @@ func parseStringValuesToMap(stringToParse []string) map[string]string {
 			continue
 		}
 		keyValues[stringToParse[i]] = id
-		log.Default().Println(v, keyValues[v])
+		//log.Default().Println(v, keyValues[v])
 	}
 
 	return keyValues
 }
 
-func parseInputString(row, unitsBucketName, delimetersBucketName string, db *nutsdb.DB) ValuesData {
+func parseInputString(row, unitsBucketName string, db *nutsdb.DB) ValuesData {
 	// TODO
 	// TOOOO deep nesting for child functions
 	var (
@@ -233,13 +241,13 @@ func parseInputString(row, unitsBucketName, delimetersBucketName string, db *nut
 		fromUnitId, toUnitId string
 	)
 	valuesData := ValuesData{}
-	delimeterIndex := getDelimeter(row, delimetersBucketName, db)
+	delimeterIndex := getDelimeter(row, unitsBucketName, db)
 
 	if delimeterIndex != -1 {
 		partBeforeDelimeter := row[:delimeterIndex]
 
 		// для from unit всегда будет значение т.к мы берем все что левее разделителя
-		fromValue, fromValueEndIndex := parseFromValueAndUnitName(partBeforeDelimeter)
+		fromValue, fromValueEndIndex := parseFromValue(partBeforeDelimeter)
 		fromUnitId := parseFromUnitId(partBeforeDelimeter, unitsBucketName, fromValueEndIndex, db)
 
 		partAfterDelimeterSlice := strings.Fields(row[delimeterIndex+4:])
@@ -267,6 +275,13 @@ func parseInputString(row, unitsBucketName, delimetersBucketName string, db *nut
 	return valuesData
 }
 
+// Конвертация строчного значения в целочисленное
+
+// Т.к из базы самый простой вариант вернуть значение в виде строки
+// то были мысли что конвертация в число может быть эффективнее на этом этапе
+// нежели mysql/maria будет занимается приведением типов на своей стороне
+
+// Могу быть неправ, но знаний у меня недостаточно. Есть ощущения что функция тяжелая, а выполняет ненужную работу.
 func convertUnitsStringIdsToInt(values ValuesData) (UnitsIds, error) {
 	var fuid, tuid int
 	convertedValues := UnitsIds{}
@@ -290,6 +305,7 @@ func convertUnitsStringIdsToInt(values ValuesData) (UnitsIds, error) {
 	return convertedValues, err
 }
 
+// Запрос в mysql/maria где на основе id элементов запрашиваются их коэффициенты по отношению к базовой единице
 func returnUnitsRatiosFromDB(db *sql.DB, fromUnitId, toUnitId int) ([]UnitStruct, error) {
 	var result []UnitStruct
 
@@ -314,6 +330,11 @@ func returnUnitsRatiosFromDB(db *sql.DB, fromUnitId, toUnitId int) ([]UnitStruct
 	return result, err
 }
 
+// Функция перебирает значения из входного массива и проверяет каждый ключ на его наличие в базе
+// Будет возврашен первый найденный ключ. При его отсутсвии, вернется пустая строка
+// Например есть строка 1unit to {nothing do I unit}
+// Входной массив из элементов {nothing do I unit} будет перебираться до тех пор пока в базе не найдется соответствующего ключа
+// или значения в массиве не закончится. Из массива найден будет {unit}
 func parseToUnitId(partAfterDelimeterSlice []string, bucketName string, db *nutsdb.DB) string {
 	var toUnitId string
 	if len(partAfterDelimeterSlice) > 0 {
@@ -331,6 +352,8 @@ func parseToUnitId(partAfterDelimeterSlice []string, bucketName string, db *nuts
 	return toUnitId
 }
 
+// Функция по ключу запрашивает значение этого ключа из локальной базы данных
+// Если ключа нет, функция вернет пустое значение
 func getUnitIndexFromDB(unitName, bucketName string, db *nutsdb.DB) (string, error) {
 	byteName := []byte(unitName)
 	var unitIndex string
@@ -352,6 +375,9 @@ func getUnitIndexFromDB(unitName, bucketName string, db *nutsdb.DB) (string, err
 	return unitIndex, err
 }
 
+// Функция разбирает входную строку на массив и берет первое значение
+// Например полная строка 123{unit some another word} to unit
+// Из входной строки вида {unit some another word} функция возьмет первое значение {unit}
 func parseFromUnitId(sliceBetweenValueAndDelimeter, bucketName string, fromValueEndIndex int, db *nutsdb.DB) string {
 
 	valuesArray := strings.Fields(sliceBetweenValueAndDelimeter[fromValueEndIndex:])
@@ -363,7 +389,10 @@ func parseFromUnitId(sliceBetweenValueAndDelimeter, bucketName string, fromValue
 	return fromUnitId
 }
 
-func parseFromValueAndUnitName(strPartBeforeDelimeter string) (int, int) {
+// В входной строке ищет числа
+// Возращает само число если такое есть и индекс последнего символа этого значения
+// Например если строка равна {123unit to unit} то функция вернет {123} - число, {2}  индекс (отсчет от 0)
+func parseFromValue(strPartBeforeDelimeter string) (int, int) {
 	var fromValue, fromValueStartIndex, fromValueEndIndex int = 0, -1, 0
 
 	for i, v := range strPartBeforeDelimeter {
@@ -384,45 +413,54 @@ func parseFromValueAndUnitName(strPartBeforeDelimeter string) (int, int) {
 	return fromValue, fromValueEndIndex
 }
 
+// Поиск в входной строке разделителя
+// Возвращает индекс первого символа разделителя
 func getDelimeter(str, bucketName string, db *nutsdb.DB) int {
 	// TODO
 	// store delimeters in different bucket
-	// var delimetersList = [5]string{" to ", " in ", " в ", " ещ ", " шт "}
+	var delimetersList = [5]string{" to ", " in ", " в ", " ещ ", " шт "}
 	var delimeterIndex int = -1
-	// for _, v := range delimetersList {
-	// 	delimeterIndex = strings.Index(str, v)
-	// 	if delimeterIndex != -1 {
-	// 		return delimeterIndex
-	// 	}
-	// }
-
-	err := db.View(
-		func(tx *nutsdb.Tx) error {
-			entries, err := tx.GetAll(bucketName)
-			if err != nil {
-				log.Default().Println("-> getDelimeter() -> tx.GetAll error:", err)
-				return err
-			}
-
-			for _, entry := range entries {
-				key := string(entry.Key)
-				keyIndex := strings.Index(str, key)
-
-				if keyIndex != -1 {
-					delimeterIndex = keyIndex
-				}
-			}
-
-			return nil
-		})
-
-	if err != nil {
-		log.Default().Println("-> getDelimeter() -> db.View error:", err)
+	for _, v := range delimetersList {
+		delimeterIndex = strings.Index(str, v)
+		if delimeterIndex != -1 {
+			return delimeterIndex
+		}
 	}
+
+	// подумал что я слишком упоролся прикручивать запрос в базу чтобы получить пару значений
+	// пока код оставлю, вдруг в будущем понадобится
+
+	/* Метод запроса в базу с получением всех ключей, перебором ключей с поиском по строке
+	// err := db.View(
+	// 	func(tx *nutsdb.Tx) error {
+	// 		entries, err := tx.GetAll(bucketName)
+	// 		if err != nil {
+	// 			log.Default().Println("-> getDelimeter() -> tx.GetAll error:", err)
+	// 			return err
+	// 		}
+
+	// 		for _, entry := range entries {
+	// 			key := string(entry.Key)
+	// 			keyIndex := strings.Index(str, key)
+
+	// 			if keyIndex != -1 {
+	// 				delimeterIndex = keyIndex
+	// 			}
+	// 		}
+
+	// 		return nil
+	// 	})
+
+	// if err != nil {
+	// 	log.Default().Println("-> getDelimeter() -> db.View error:", err)
+	// }
+	*/
 
 	return delimeterIndex
 }
 
+// Получение всех сохраненных пар ключ-значение из базы
+// Используется для отображения списка в админке
 func getAllBucketKeyPairs(bucketName string, db *nutsdb.DB) []KeyValuePair {
 	var bucketKeyValuesList []KeyValuePair
 
